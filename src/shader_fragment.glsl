@@ -124,8 +124,15 @@ void main()
         V = texcoords.y;
     }
 
-    // Obtemos a refletância difusa a partir da leitura da imagem TextureImage0
-    vec3 Kd0 = texture(TextureImage0, vec2(U,V)).rgb;
+    // Obtemos a refletância difusa a partir da leitura da imagem TextureImageX
+    vec3 Kd0;
+
+    if ( object_id == PLANE ) {
+        Kd0 = texture(TextureImage1, vec2(U, V)).rgb;
+    }
+    else {
+        Kd0 = texture(TextureImage0, vec2(U, V)).rgb;
+    }
 
     // Equação de Iluminação
     float lambert = max(0,dot(n,l));

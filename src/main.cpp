@@ -177,11 +177,55 @@ GLint bbox_max_uniform;
 
 // Indicador de acerto de ataque na posição atual
 GLint is_hit = 0;
-std::vector<int> is_hit_list {0, 0, 0, 0, 0, 0, 0, 0, 0};
-std::vector<double> is_hit_animation_timer {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // Número de texturas carregadas pela função LoadTextureImage()
 GLuint g_NumLoadedTextures = 0;
+
+#define SPHERE 0
+#define BUNNY  1
+#define PLANE  2
+
+// Estrutura que define uma posição do ambiente
+struct Tile {
+    Tile(float x, float y, float z) : position_(glm::vec3(x, y, z))
+    {}
+
+    void Draw(glm::mat4& model) {
+        // Verifica animação
+        if (is_hit_time_ > 0 and glfwGetTime() - is_hit_time_ > 0.5) {
+            is_hit_time_ = 0;
+            is_hit_ = 0;
+        }
+
+        // Desenha o plano
+        model = Matrix_Translate(position_.x, position_.y, position_.z);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, object_id_);
+        glUniform1i(is_hit, is_hit_);
+        DrawVirtualObject(object_name_.c_str());
+    }
+
+    void SetHit() {
+        is_hit_ = 1;
+        is_hit_time_ = glfwGetTime();
+    }
+
+    glm::vec3 position_;
+    int is_hit_ = 0;
+    double is_hit_time_ = 0;
+    int object_id_ = PLANE;
+    std::string object_name_ = "plane";
+};
+
+Tile Tile1(-2.5f, -1.0f, 0.0f);
+Tile Tile2(0.0f, -1.0f, 0.0f);
+Tile Tile3(2.5f, -1.0f, 0.0f);
+Tile Tile4(-2.5f ,-1.0f ,-2.5f);
+Tile Tile5(0.0f, -1.0f, -2.5f);
+Tile Tile6(2.5f, -1.0f, -2.5f);
+Tile Tile7(-2.5f ,-1.0f ,-5.0f);
+Tile Tile8(0.0f, -1.0f, -5.0f);
+Tile Tile9(2.5f, -1.0f, -5.0f);
 
 int main(int argc, char* argv[])
 {
@@ -374,75 +418,16 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(view_uniform       , 1 , GL_FALSE , glm::value_ptr(view));
         glUniformMatrix4fv(projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
-        #define SPHERE 0
-        #define BUNNY  1
-        #define PLANE  2
-
-        // TODO Parametrizar posições, colocar em um map
         // Desenhamos os nove planos que definem o ambiente de jogo
-        model = Matrix_Translate(-2.5f,-1.0f,0.0f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[0]);
-        DrawVirtualObject("plane");
-
-        model = Matrix_Translate(0.0f,-1.0f,0.0f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[1]);
-        DrawVirtualObject("plane");
-
-        model = Matrix_Translate(2.5f,-1.0f,0.0f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[2]);
-        DrawVirtualObject("plane");
-
-        model = Matrix_Translate(-2.5f,-1.0f,-2.5f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[3]);
-        DrawVirtualObject("plane");
-
-        model = Matrix_Translate(0.0f,-1.0f,-2.5f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[4]);
-        DrawVirtualObject("plane");
-
-        model = Matrix_Translate(2.5f,-1.0f,-2.5f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[5]);
-        DrawVirtualObject("plane");
-
-        model = Matrix_Translate(-2.5f,-1.0f,-5.0f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[6]);
-        DrawVirtualObject("plane");
-
-        model = Matrix_Translate(0.0f,-1.0f,-5.0f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[7]);
-        DrawVirtualObject("plane");
-
-        model = Matrix_Translate(2.5f,-1.0f,-5.0f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        glUniform1i(is_hit, is_hit_list[8]);
-        DrawVirtualObject("plane");
-
-        // Verifica animações
-        double tnow = glfwGetTime();
-
-        for (size_t i = 0; i < is_hit_animation_timer.size(); i++) {
-            if (is_hit_animation_timer[i] > 0 and tnow - is_hit_animation_timer[i] > 0.5) {
-                is_hit_animation_timer[i] = 0;
-                is_hit_list[i] = 0;
-            }
-        }
+        Tile1.Draw(model);
+        Tile2.Draw(model);
+        Tile3.Draw(model);
+        Tile4.Draw(model);
+        Tile5.Draw(model);
+        Tile6.Draw(model);
+        Tile7.Draw(model);
+        Tile8.Draw(model);
+        Tile9.Draw(model);
 
         // O framebuffer onde OpenGL executa as operações de renderização não
         // é o mesmo que está sendo mostrado para o usuário, caso contrário
@@ -1226,48 +1211,39 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     switch (key) {
         case GLFW_KEY_1:
         case GLFW_KEY_KP_1:
-            is_hit_list[0] = 1;
-            is_hit_animation_timer[0] = glfwGetTime();
+            Tile1.SetHit();
             break;
         case GLFW_KEY_2:
         case GLFW_KEY_KP_2:
-            is_hit_list[1] = 1;
-            is_hit_animation_timer[1] = glfwGetTime();
+            Tile2.SetHit();
             break;
         case GLFW_KEY_3:
         case GLFW_KEY_KP_3:
-            is_hit_list[2] = 1;
-            is_hit_animation_timer[2] = glfwGetTime();
+            Tile3.SetHit();
             break;
         case GLFW_KEY_4:
         case GLFW_KEY_KP_4:
-            is_hit_list[3] = 1;
-            is_hit_animation_timer[3] = glfwGetTime();
+            Tile4.SetHit();
             break;
         case GLFW_KEY_5:
         case GLFW_KEY_KP_5:
-            is_hit_list[4] = 1;
-            is_hit_animation_timer[4] = glfwGetTime();
+            Tile5.SetHit();
             break;
         case GLFW_KEY_6:
         case GLFW_KEY_KP_6:
-            is_hit_list[5] = 1;
-            is_hit_animation_timer[5] = glfwGetTime();
+            Tile6.SetHit();
             break;
         case GLFW_KEY_7:
         case GLFW_KEY_KP_7:
-            is_hit_list[6] = 1;
-            is_hit_animation_timer[6] = glfwGetTime();
+            Tile7.SetHit();
             break;
         case GLFW_KEY_8:
         case GLFW_KEY_KP_8:
-            is_hit_list[7] = 1;
-            is_hit_animation_timer[7] = glfwGetTime();
+            Tile8.SetHit();
             break;
         case GLFW_KEY_9:
         case GLFW_KEY_KP_9:
-            is_hit_list[8] = 1;
-            is_hit_animation_timer[8] = glfwGetTime();
+            Tile9.SetHit();
             break;
     }
 }

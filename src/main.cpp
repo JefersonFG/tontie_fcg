@@ -175,6 +175,11 @@ GLint object_id_uniform;
 GLint bbox_min_uniform;
 GLint bbox_max_uniform;
 
+// Indicador de acerto de ataque na posição atual
+GLint is_hit = 0;
+std::vector<int> is_hit_list {0, 0, 0, 0, 0, 0, 0, 0, 0};
+std::vector<double> is_hit_animation_timer {0, 0, 0, 0, 0, 0, 0, 0, 0};
+
 // Número de texturas carregadas pela função LoadTextureImage()
 GLuint g_NumLoadedTextures = 0;
 
@@ -252,8 +257,8 @@ int main(int argc, char* argv[])
     LoadShadersFromFiles();
 
     // Carregamos duas imagens para serem utilizadas como textura
-    LoadTextureImage("../../data/tc-earth_daymap_surface.jpg");      // TextureImage0
-    LoadTextureImage("../../data/stonetiles.png"); // TextureImage1
+    LoadTextureImage("../../data/stonetiles.png"); // TextureImage0
+    LoadTextureImage("../../data/stonetilesred.png"); // TextureImage1
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
     ObjModel spheremodel("../../data/sphere.obj");
@@ -378,47 +383,66 @@ int main(int argc, char* argv[])
         model = Matrix_Translate(-2.5f,-1.0f,0.0f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[0]);
         DrawVirtualObject("plane");
 
         model = Matrix_Translate(0.0f,-1.0f,0.0f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[1]);
         DrawVirtualObject("plane");
 
         model = Matrix_Translate(2.5f,-1.0f,0.0f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[2]);
         DrawVirtualObject("plane");
 
         model = Matrix_Translate(-2.5f,-1.0f,-2.5f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[3]);
         DrawVirtualObject("plane");
 
         model = Matrix_Translate(0.0f,-1.0f,-2.5f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[4]);
         DrawVirtualObject("plane");
 
         model = Matrix_Translate(2.5f,-1.0f,-2.5f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[5]);
         DrawVirtualObject("plane");
 
         model = Matrix_Translate(-2.5f,-1.0f,-5.0f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[6]);
         DrawVirtualObject("plane");
 
         model = Matrix_Translate(0.0f,-1.0f,-5.0f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[7]);
         DrawVirtualObject("plane");
 
         model = Matrix_Translate(2.5f,-1.0f,-5.0f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, PLANE);
+        glUniform1i(is_hit, is_hit_list[8]);
         DrawVirtualObject("plane");
+
+        // Verifica animações
+        double tnow = glfwGetTime();
+
+        for (size_t i = 0; i < is_hit_animation_timer.size(); i++) {
+            if (is_hit_animation_timer[i] > 0 and tnow - is_hit_animation_timer[i] > 0.5) {
+                is_hit_animation_timer[i] = 0;
+                is_hit_list[i] = 0;
+            }
+        }
 
         // O framebuffer onde OpenGL executa as operações de renderização não
         // é o mesmo que está sendo mostrado para o usuário, caso contrário
@@ -567,6 +591,7 @@ void LoadShadersFromFiles()
     view_uniform            = glGetUniformLocation(program_id, "view"); // Variável da matriz "view" em shader_vertex.glsl
     projection_uniform      = glGetUniformLocation(program_id, "projection"); // Variável da matriz "projection" em shader_vertex.glsl
     object_id_uniform       = glGetUniformLocation(program_id, "object_id"); // Variável "object_id" em shader_fragment.glsl
+    is_hit                  = glGetUniformLocation(program_id, "is_hit");
     bbox_min_uniform        = glGetUniformLocation(program_id, "bbox_min");
     bbox_max_uniform        = glGetUniformLocation(program_id, "bbox_max");
 
@@ -1195,6 +1220,55 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         LoadShadersFromFiles();
         fprintf(stdout,"Shaders recarregados!\n");
         fflush(stdout);
+    }
+
+    // Teclas de ataque às posições
+    switch (key) {
+        case GLFW_KEY_1:
+        case GLFW_KEY_KP_1:
+            is_hit_list[0] = 1;
+            is_hit_animation_timer[0] = glfwGetTime();
+            break;
+        case GLFW_KEY_2:
+        case GLFW_KEY_KP_2:
+            is_hit_list[1] = 1;
+            is_hit_animation_timer[1] = glfwGetTime();
+            break;
+        case GLFW_KEY_3:
+        case GLFW_KEY_KP_3:
+            is_hit_list[2] = 1;
+            is_hit_animation_timer[2] = glfwGetTime();
+            break;
+        case GLFW_KEY_4:
+        case GLFW_KEY_KP_4:
+            is_hit_list[3] = 1;
+            is_hit_animation_timer[3] = glfwGetTime();
+            break;
+        case GLFW_KEY_5:
+        case GLFW_KEY_KP_5:
+            is_hit_list[4] = 1;
+            is_hit_animation_timer[4] = glfwGetTime();
+            break;
+        case GLFW_KEY_6:
+        case GLFW_KEY_KP_6:
+            is_hit_list[5] = 1;
+            is_hit_animation_timer[5] = glfwGetTime();
+            break;
+        case GLFW_KEY_7:
+        case GLFW_KEY_KP_7:
+            is_hit_list[6] = 1;
+            is_hit_animation_timer[6] = glfwGetTime();
+            break;
+        case GLFW_KEY_8:
+        case GLFW_KEY_KP_8:
+            is_hit_list[7] = 1;
+            is_hit_animation_timer[7] = glfwGetTime();
+            break;
+        case GLFW_KEY_9:
+        case GLFW_KEY_KP_9:
+            is_hit_list[8] = 1;
+            is_hit_animation_timer[8] = glfwGetTime();
+            break;
     }
 }
 

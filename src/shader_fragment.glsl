@@ -24,6 +24,9 @@ uniform mat4 projection;
 #define PLANE  2
 uniform int object_id;
 
+// Indicador de acerto de ataque na posição atual
+uniform int is_hit;
+
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
 uniform vec4 bbox_min;
 uniform vec4 bbox_max;
@@ -127,10 +130,9 @@ void main()
     // Obtemos a refletância difusa a partir da leitura da imagem TextureImageX
     vec3 Kd0;
 
-    if ( object_id == PLANE ) {
+    if ( object_id == PLANE && is_hit == 1 ) {
         Kd0 = texture(TextureImage1, vec2(U, V)).rgb;
-    }
-    else {
+    } else {
         Kd0 = texture(TextureImage0, vec2(U, V)).rgb;
     }
 

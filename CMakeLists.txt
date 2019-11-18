@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.15)
 project(tontie_fcg)
 
+# Fix for CMake bug "sh.exe was found in your PATH"
+set(DCMAKE_SH="CMAKE_SH-NOTFOUND")
+
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/bin/Debug)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/bin/Release)

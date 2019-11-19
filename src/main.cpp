@@ -186,8 +186,9 @@ GLuint g_NumLoadedTextures = 0;
 #define PLANE  2
 
 // Estrutura que define uma posição do ambiente
-struct Tile {
-    Tile(float x, float y, float z) : position_(glm::vec3(x, y, z))
+class Tile {
+public:
+    explicit Tile(glm::vec3 position) : position_(position)
     {}
 
     void Draw(glm::mat4& model) {
@@ -205,11 +206,12 @@ struct Tile {
         DrawVirtualObject(object_name_.c_str());
     }
 
-    void SetHit() {
+    void Hit() {
         is_hit_ = 1;
         is_hit_time_ = glfwGetTime();
     }
 
+private:
     glm::vec3 position_;
     int is_hit_ = 0;
     double is_hit_time_ = 0;
@@ -217,15 +219,123 @@ struct Tile {
     std::string object_name_ = "plane";
 };
 
-Tile Tile1(-2.5f, -1.0f, 0.0f);
-Tile Tile2(0.0f, -1.0f, 0.0f);
-Tile Tile3(2.5f, -1.0f, 0.0f);
-Tile Tile4(-2.5f ,-1.0f ,-2.5f);
-Tile Tile5(0.0f, -1.0f, -2.5f);
-Tile Tile6(2.5f, -1.0f, -2.5f);
-Tile Tile7(-2.5f ,-1.0f ,-5.0f);
-Tile Tile8(0.0f, -1.0f, -5.0f);
-Tile Tile9(2.5f, -1.0f, -5.0f);
+// Classe base para inimigos no jogo
+class Enemy {
+public:
+  Enemy(glm::vec3 position, int num_lives) :
+    position_(position), num_lives_(num_lives)
+  {}
+
+  /**
+   * Função para desenhar o inimigo na tela
+   */
+   virtual void Draw(glm::mat4& model) = 0;
+
+  /**
+   * Registra um ataque ao inimigo, retorna true se morreu
+   */
+  bool Hit() {
+    return --num_lives_ <= 0;
+  }
+
+protected:
+  glm::vec3 position_;
+  int num_lives_;
+};
+
+// Classe que define o inimigo básico coelho
+class Rabbit : public Enemy {
+public:
+  explicit Rabbit(glm::vec3 position) : Enemy(position, 2 /* Number of lives */)
+  {}
+
+  void Draw(glm::mat4& model) override {
+    // Desenha o coelho
+    model = Matrix_Translate(position_.x, position_.y + 0.8f, position_.z)
+      * Matrix_Scale(0.8f, 0.8f, 0.8f);
+    glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(model));
+    glUniform1i(object_id_uniform, object_id_);
+    DrawVirtualObject(object_name_.c_str());
+  }
+
+private:
+  int object_id_ = BUNNY;
+  std::string object_name_ = "bunny";
+};
+
+// Classe responsável pelo processamento da lógica de jogo
+class World {
+public:
+  World() :
+    position_list_({
+      glm::vec3(-2.5f, -1.0f, 0.0f),
+      glm::vec3(0.0f, -1.0f, 0.0f),
+      glm::vec3(2.5f, -1.0f, 0.0f),
+      glm::vec3(-2.5f ,-1.0f ,-2.5f),
+      glm::vec3(0.0f, -1.0f, -2.5f),
+      glm::vec3(2.5f, -1.0f, -2.5f),
+      glm::vec3(-2.5f ,-1.0f ,-5.0f),
+      glm::vec3(0.0f, -1.0f, -5.0f),
+      glm::vec3(2.5f, -1.0f, -5.0f)
+    })
+  {
+    for (const auto& position : position_list_) {
+      tile_list_.emplace_back(position);
+      rabbit_list_.emplace_back(position);
+    }
+  }
+
+  /**
+   * Desenha os objetos de jogo, ambiente e inimigos ativos
+   */
+  void Draw(glm::mat4& model) {
+    // Desenhamos os nove planos que definem o ambiente de jogo
+    for (auto& tile : tile_list_)
+      tile.Draw(model);
+
+    // TODO(jfguimaraes) Implement enemy spawning and despawning logic
+    static bool added_test_enemy = false;
+
+    if (!added_test_enemy) {
+      added_test_enemy = true;
+      enemy_list_.insert(std::pair<int, Enemy*>(3, &rabbit_list_[3]));
+    }
+
+    for (auto& enemy : enemy_list_) {
+      enemy.second->Draw(model);
+    }
+  }
+
+  /**
+   * Processa o comando de martelar uma posição
+   */
+  void HitPosition(int position) {
+    tile_list_[position].Hit();
+
+    if (enemy_list_.find(position) != enemy_list_.end()) {
+      bool is_dead = enemy_list_[position]->Hit();
+
+      if (is_dead)
+        enemy_list_.erase(position);
+    }
+  }
+
+private:
+  // Coordenadas das posições do tabuleiro
+  const std::vector<glm::vec3> position_list_;
+
+  // Define todos planos do ambiente
+  std::vector<Tile> tile_list_;
+
+  // Define um coelho para cada posição, a escolha de renderizar ou não é feita em runtime
+  std::vector<Rabbit> rabbit_list_;
+
+  // Mapea inimigos nas posições do tabuleiro
+  std::map<int, Enemy*> enemy_list_;
+};
+
+// Inicializamos a classe que controla a lógica de jogo
+World world;
 
 int main(int argc, char* argv[])
 {
@@ -418,16 +528,8 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(view_uniform       , 1 , GL_FALSE , glm::value_ptr(view));
         glUniformMatrix4fv(projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
-        // Desenhamos os nove planos que definem o ambiente de jogo
-        Tile1.Draw(model);
-        Tile2.Draw(model);
-        Tile3.Draw(model);
-        Tile4.Draw(model);
-        Tile5.Draw(model);
-        Tile6.Draw(model);
-        Tile7.Draw(model);
-        Tile8.Draw(model);
-        Tile9.Draw(model);
+        // Desenhamos os elementos de jogo
+        world.Draw(model);
 
         // O framebuffer onde OpenGL executa as operações de renderização não
         // é o mesmo que está sendo mostrado para o usuário, caso contrário
@@ -1207,43 +1309,44 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         fflush(stdout);
     }
 
+    // TODO(jfguimaraes) Register press and release of keys
     // Teclas de ataque às posições
     switch (key) {
         case GLFW_KEY_1:
         case GLFW_KEY_KP_1:
-            Tile1.SetHit();
+            world.HitPosition(0);
             break;
         case GLFW_KEY_2:
         case GLFW_KEY_KP_2:
-            Tile2.SetHit();
+            world.HitPosition(1);
             break;
         case GLFW_KEY_3:
         case GLFW_KEY_KP_3:
-            Tile3.SetHit();
+            world.HitPosition(2);
             break;
         case GLFW_KEY_4:
         case GLFW_KEY_KP_4:
-            Tile4.SetHit();
+            world.HitPosition(3);
             break;
         case GLFW_KEY_5:
         case GLFW_KEY_KP_5:
-            Tile5.SetHit();
+            world.HitPosition(4);
             break;
         case GLFW_KEY_6:
         case GLFW_KEY_KP_6:
-            Tile6.SetHit();
+            world.HitPosition(5);
             break;
         case GLFW_KEY_7:
         case GLFW_KEY_KP_7:
-            Tile7.SetHit();
+            world.HitPosition(6);
             break;
         case GLFW_KEY_8:
         case GLFW_KEY_KP_8:
-            Tile8.SetHit();
+            world.HitPosition(7);
             break;
         case GLFW_KEY_9:
         case GLFW_KEY_KP_9:
-            Tile9.SetHit();
+            world.HitPosition(8);
             break;
     }
 }

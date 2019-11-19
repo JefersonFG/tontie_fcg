@@ -71,6 +71,15 @@ void main()
     float U = 0.0;
     float V = 0.0;
 
+    // Vetor que define o sentido da reflexão especular ideal.
+    vec4 r = -l + 2*n*dot(n,l);
+
+    // Parâmetros que definem as propriedades espectrais da superfície
+    vec3 Kd; // Refletância difusa
+    vec3 Ks; // Refletância especular
+    vec3 Ka; // Refletância ambiente
+    float q; // Expoente especular para o modelo de iluminação de Phong
+
     if ( object_id == SPHERE )
     {
         // PREENCHA AQUI as coordenadas de textura da esfera, computadas com
@@ -99,26 +108,11 @@ void main()
     }
     else if ( object_id == BUNNY )
     {
-        // PREENCHA AQUI as coordenadas de textura do coelho, computadas com
-        // projeção planar XY em COORDENADAS DO MODELO. Utilize como referência
-        // o slide 111 do documento "Aula_20_e_21_Mapeamento_de_Texturas.pdf",
-        // e também use as variáveis min*/max* definidas abaixo para normalizar
-        // as coordenadas de textura U e V dentro do intervalo [0,1]. Para
-        // tanto, veja por exemplo o mapeamento da variável 'p_v' utilizando
-        // 'h' no slide 154 do documento "Aula_20_e_21_Mapeamento_de_Texturas.pdf".
-        // Veja também a Questão 4 do Questionário 4 no Moodle.
-
-        float minx = bbox_min.x;
-        float maxx = bbox_max.x;
-
-        float miny = bbox_min.y;
-        float maxy = bbox_max.y;
-
-        float minz = bbox_min.z;
-        float maxz = bbox_max.z;
-
-        U = (position_model[0] - minx) / (maxx - minx);
-        V = (position_model[1] - miny) / (maxy - miny);
+        // Propriedades espectrais do coelho
+        Kd = vec3(0.08, 0.4, 0.8);
+        Ks = vec3(0.8, 0.8, 0.8);
+        Ka = vec3(0.04, 0.2, 0.4);
+        q = 32.0;
     }
     else if ( object_id == PLANE )
     {
@@ -127,21 +121,35 @@ void main()
         V = texcoords.y;
     }
 
-    // Obtemos a refletância difusa a partir da leitura da imagem TextureImageX
-    vec3 Kd0;
+    if ( object_id == BUNNY ) {
+        // Para o coelho utilizamos iluminação difusa e Blinn-Phong
+        // Espectro da fonte de iluminação
+        vec3 I = vec3(1.0, 1.0, 1.0);
 
-    if ( object_id == PLANE && is_hit == 1 ) {
-        Kd0 = texture(TextureImage1, vec2(U, V)).rgb;
-    } else {
-        Kd0 = texture(TextureImage0, vec2(U, V)).rgb;
+        // Espectro da luz ambiente
+        vec3 Ia = vec3(0.2, 0.2, 0.2);
+
+        // Termo difuso utilizando a lei dos cossenos de Lambert
+        vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l));
+
+        // Termo ambiente
+        vec3 ambient_term = Ka * Ia;
+
+        // Termo especular utilizando o modelo de iluminação de Phong
+        vec3 phong_specular_term = Ks * I * pow(dot(r,v),q);
+
+        // Cor final do fragmento calculada com uma combinação dos termos difuso,
+        // especular, e ambiente. Veja slide 133 do documento "Aula_17_e_18_Modelos_de_Iluminacao.pdf".
+        color = lambert_diffuse_term + ambient_term + phong_specular_term;
+    } else if ( object_id == PLANE ) {
+        // Para o plano mapeamos texturas
+        // Obtemos a refletância difusa a partir da leitura da imagem TextureImageX
+        vec3 Kd0 = texture(is_hit == 1 ? TextureImage1 : TextureImage0, vec2(U, V)).rgb;
+
+        // Equação de Iluminação
+        float lambert = max(0, dot(n, l));
+        color = Kd0 * (lambert + 0.01);
     }
-
-    // Equação de Iluminação
-    float lambert = max(0,dot(n,l));
-
-    // TODO - Parte 2 - Usar termo de lambert para escalar o termo da textura
-    // Quando o termo de lambert for pequeno (imagem escura) aplica a textura
-    color = Kd0 * (lambert + 0.01);
 
     // Cor final com correção gamma, considerando monitor sRGB.
     // Veja https://en.wikipedia.org/w/index.php?title=Gamma_correction&oldid=751281772#Windows.2C_Mac.2C_sRGB_and_TV.2Fvideo_standard_gammas

@@ -290,6 +290,30 @@ private:
   std::string object_name_ = "bunny";
 };
 
+// Classe que define um inimigo baseado no modelo da esfera
+class Sphere : public Enemy {
+public:
+  explicit Sphere(glm::vec3 position) : Enemy(position, 2 /* Vidas */, 6 /* Tempo em campo */)
+  {}
+
+  void Draw(glm::mat4& model) override {
+    // Desenha a esfera
+    model = Matrix_Translate(position_.x, position_.y + 0.8f, position_.z)
+      * Matrix_Scale(0.8f, 0.8f, 0.8f);
+    glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(model));
+    glUniform1i(object_id_uniform, object_id_);
+    DrawVirtualObject(object_name_.c_str());
+  }
+
+  static std::string ObjFilePath() {
+    return "../../data/sphere.obj";
+  }
+
+private:
+  int object_id_ = SPHERE;
+  std::string object_name_ = "sphere";
+};
+
 // Classe responsável pelo processamento da lógica de jogo
 class World {
 public:
@@ -306,13 +330,15 @@ public:
       glm::vec3(2.5f, -1.0f, -5.0f)
     }),
     random_algorithm_(random_device_()),
-    rng_(0, 8),
+    placement_rng_(0, 8),
+    enemy_type_rng_(0, 1),
     last_enemy_placement_time_(glfwGetTime())
   {
     // Cria planos e inimigos em todas as posições, exibe e esconde sob demanda
     for (const auto& position : position_list_) {
       tile_list_.emplace_back(position);
       rabbit_list_.emplace_back(position);
+      sphere_list_.emplace_back(position);
     }
   }
 
@@ -328,11 +354,26 @@ public:
 
     if (current_time - last_enemy_placement_time_ >= 0.8) {
       last_enemy_placement_time_ = current_time;
-      auto enemy_place = rng_(random_algorithm_);
+      auto enemy_place = placement_rng_(random_algorithm_);
 
       if (enemy_list_.find(enemy_place) == enemy_list_.end()) {
-        enemy_list_.insert( std::pair<int, Enemy*>( enemy_place, &rabbit_list_[enemy_place] ));
-        rabbit_list_[enemy_place].SetSpawnTime(current_time);
+        // Decide o inimigo aleatoriamente
+        auto enemy_type = enemy_type_rng_(random_algorithm_);
+        Enemy* new_enemy = nullptr;
+
+        switch (enemy_type) {
+          case 0:
+            new_enemy = &rabbit_list_[enemy_place];
+            break;
+          case 1:
+            new_enemy = &sphere_list_[enemy_place];
+            break;
+          default:
+            new_enemy = &rabbit_list_[enemy_place];
+        }
+
+        enemy_list_.insert( std::pair<int, Enemy*>(enemy_place, new_enemy));
+        new_enemy->SetSpawnTime(current_time);
       }
     }
 
@@ -413,13 +454,17 @@ private:
   // Define um coelho para cada posição, a escolha de renderizar ou não é feita em runtime
   std::vector<Rabbit> rabbit_list_;
 
+  // Define uma esfera para cada posição
+  std::vector<Sphere> sphere_list_;
+
   // Mapea inimigos nas posições do tabuleiro
   std::map<int, Enemy*> enemy_list_;
 
   // Gerador de números aleatórios para posicionamento dos inimigos
   std::random_device random_device_;
   std::mt19937 random_algorithm_;
-  std::uniform_int_distribution<std::mt19937::result_type> rng_;
+  std::uniform_int_distribution<std::mt19937::result_type> placement_rng_;
+  std::uniform_int_distribution<std::mt19937::result_type> enemy_type_rng_;
 
   // Registro de tempo do último inimigo adicionado
   double last_enemy_placement_time_;
@@ -506,7 +551,7 @@ int main(int argc, char* argv[])
     LoadTextureImage("../../data/stonetilesred.png"); // TextureImage1
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
-    ObjModel spheremodel("../../data/sphere.obj");
+    ObjModel spheremodel(Sphere::ObjFilePath().c_str());
     ComputeNormals(&spheremodel);
     BuildTrianglesAndAddToVirtualScene(&spheremodel);
 

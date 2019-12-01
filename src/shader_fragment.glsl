@@ -80,31 +80,19 @@ void main()
     vec3 Ka; // Refletância ambiente
     float q; // Expoente especular para o modelo de iluminação de Phong
 
+    // Espectro da fonte de iluminação
+    vec3 I = vec3(1.0, 1.0, 1.0);
+
+    // Espectro da luz ambiente
+    vec3 Ia = vec3(0.2, 0.2, 0.2);
+
     if ( object_id == SPHERE )
     {
-        // PREENCHA AQUI as coordenadas de textura da esfera, computadas com
-        // projeção esférica EM COORDENADAS DO MODELO. Utilize como referência
-        // o slide 144 do documento "Aula_20_e_21_Mapeamento_de_Texturas.pdf".
-        // A esfera que define a projeção deve estar centrada na posição
-        // "bbox_center" definida abaixo.
-
-        // Você deve utilizar:
-        //   função 'length( )' : comprimento Euclidiano de um vetor
-        //   função 'atan( , )' : arcotangente. Veja https://en.wikipedia.org/wiki/Atan2.
-        //   função 'asin( )'   : seno inverso.
-        //   constante M_PI
-        //   variável position_model
-
-        vec4 bbox_center = (bbox_min + bbox_max) / 2.0;
-
-        vec4 p2 = position_model - bbox_center;
-
-        float rho = length(p2);
-        float theta = atan(p2.x, p2.z);
-        float phi = asin(p2.y / rho);
-
-        U = (theta + M_PI) / (2 * M_PI);
-        V = (phi + M_PI_2) / M_PI;
+        // Propriedades espectrais da esfera
+        Kd = vec3(0.8,0.4,0.08);
+        Ks = vec3(0.0,0.0,0.0);
+        Ka = vec3(0.4,0.2,0.04);
+        q = 1.0;
     }
     else if ( object_id == BUNNY )
     {
@@ -121,13 +109,19 @@ void main()
         V = texcoords.y;
     }
 
-    if ( object_id == BUNNY ) {
-        // Para o coelho utilizamos iluminação difusa e Blinn-Phong
-        // Espectro da fonte de iluminação
-        vec3 I = vec3(1.0, 1.0, 1.0);
+    if ( object_id == SPHERE ) {
+        // Para a esfera utilizamos iluminação difusa de Lambert
 
-        // Espectro da luz ambiente
-        vec3 Ia = vec3(0.2, 0.2, 0.2);
+        // Termo difuso utilizando a lei dos cossenos de Lambert
+        vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l));
+
+        // Termo ambiente
+        vec3 ambient_term = Ka * Ia;
+
+        // Cor final do fragmento calculada com uma combinação dos termos difuso e ambiente
+        color = lambert_diffuse_term + ambient_term;
+    } else if ( object_id == BUNNY ) {
+        // Para o coelho utilizamos iluminação difusa e Blinn-Phong
 
         // Termo difuso utilizando a lei dos cossenos de Lambert
         vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l));

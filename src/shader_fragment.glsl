@@ -23,6 +23,7 @@ uniform mat4 projection;
 #define BUNNY  1
 #define PLANE  2
 #define COW    3
+#define HAMMER 4
 uniform int object_id;
 
 // Indicador de acerto de ataque na posição atual
@@ -124,6 +125,13 @@ void main()
         U = (position_model[0] - minx) / (maxx - minx);
         V = (position_model[1] - miny) / (maxy - miny);
     }
+    else if ( object_id == HAMMER )
+    {
+        Kd = vec3(0.27,0.27,0.27);
+        Ks = vec3(0.27,0.27,0.27);
+        Ka = vec3(0.27,0.27,0.27);
+        q = 1.0;
+    }
 
     if ( object_id == SPHERE ) {
         // Para a esfera utilizamos iluminação difusa de Lambert
@@ -166,10 +174,20 @@ void main()
         // Equação de Iluminação
         float lambert = max(0, dot(n, l));
         color = Kd0 * (lambert + 0.01);
+    } else if ( object_id == HAMMER ) {
+        // Para o martelo utilizamos iluminação difusa de Lambert
+
+        // Termo difuso utilizando a lei dos cossenos de Lambert
+        vec3 lambert_diffuse_term = Kd * I * max(0, dot(n, l));
+
+        // Termo ambiente
+        vec3 ambient_term = Ka * Ia;
+
+        // Cor final do fragmento calculada com uma combinação dos termos difuso e ambiente
+        color = lambert_diffuse_term + ambient_term;
     }
 
     // Cor final com correção gamma, considerando monitor sRGB.
     // Veja https://en.wikipedia.org/w/index.php?title=Gamma_correction&oldid=751281772#Windows.2C_Mac.2C_sRGB_and_TV.2Fvideo_standard_gammas
     color = pow(color, vec3(1.0,1.0,1.0)/2.2);
 }
-

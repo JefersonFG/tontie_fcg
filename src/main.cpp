@@ -188,8 +188,9 @@ GLuint g_NumLoadedTextures = 0;
 #define BUNNY  1
 #define PLANE  2
 #define COW    3
+#define HAMMER 4
 
-// Estrutura que define uma posição do ambiente
+// Classe que define uma posição do ambiente
 class Tile {
 public:
     explicit Tile(glm::vec3 position) : position_(position)
@@ -294,7 +295,7 @@ private:
 // Classe que define um inimigo baseado no modelo da esfera
 class Sphere : public Enemy {
 public:
-  explicit Sphere(glm::vec3 position) : Enemy(position, 1 /* Vidas */, 6 /* Tempo em campo */)
+  explicit Sphere(glm::vec3 position) : Enemy(position, 1 /* Vidas */, 4 /* Tempo em campo */)
   {}
 
   void Draw(glm::mat4& model) override {
@@ -323,7 +324,7 @@ public:
 
   void Draw(glm::mat4& model) override {
     // Desenha a vaca
-    model = Matrix_Translate(position_.x - 0.2f, position_.y + 0.6f, position_.z + 0.5f)
+    model = Matrix_Translate(position_.x - 0.1f, position_.y + 0.6f, position_.z + 0.4f)
       * Matrix_Rotate_Y(3 * M_PI / 2);
     glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(model));
     glUniform1i(object_id_uniform, object_id_);
@@ -337,6 +338,91 @@ public:
 private:
   int object_id_ = COW;
   std::string object_name_ = "cow";
+};
+
+// Classe que representa o martelo, desenhado na animação de ataque
+class Hammer {
+public:
+  explicit Hammer(glm::vec3 position) : final_position_(position.x + 0.7f, position.y + 0.5f, position.z - 0.2f),
+    position_1_(final_position_.x + 1.0f, final_position_.y + 2.0f, final_position_.z),
+    position_2_(final_position_.x + 1.2f, final_position_.y + 1.0f, final_position_.z),
+    position_3_(final_position_.x + -0.2f, final_position_.y + 1.0f, final_position_.z),
+    position_4_(final_position_), t_(0), tprev_(glfwGetTime()) {
+    // Posição inicial da animação
+    current_position_ = position_1_;
+  }
+
+  /**
+   * Atualiza a posição do martelo para desenho da animação
+   * Retorna true se o martelo deve ser desenhado, falso se a animação deve finalizar
+   */
+  bool UpdatePosition() {
+    // Calcula a posição do martelo
+    double tnow = glfwGetTime();
+    double deltat = tnow - tprev_;
+    tprev_ = tnow;
+
+    t_ += static_cast<float>(deltat * 3.5);
+    current_position_ = C(t_);
+
+    // Retorna se passou do limite
+    return t_ <= 1;
+  }
+
+  void Draw(glm::mat4& model) {
+    // Desenha o martelo
+    model = Matrix_Translate(current_position_.x, current_position_.y, current_position_.z)
+      * Matrix_Scale(0.1f, 0.1f, 0.1f)
+      * Matrix_Rotate_Y(M_PI / 2)
+      * Matrix_Rotate_Z(M_PI / 2);
+    glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+    glUniform1i(object_id_uniform, object_id_);
+    DrawVirtualObject(object_name_.c_str());
+  }
+
+  static std::string ObjFilePath() {
+    return "../../data/hammer.obj";
+  }
+
+private:
+  // Funções da curva de bezier
+  glm::vec3 C12 (float t) {
+    return position_1_ + t * (position_2_ - position_1_);
+  };
+
+  glm::vec3 C23 (float t) {
+    return position_2_ + t * (position_3_ - position_2_);
+  };
+
+  glm::vec3 C34 (float t) {
+    return position_3_ + t * (position_4_ - position_3_);
+  };
+
+  glm::vec3 C123 (float t) {
+    return C12(t) + t * (C23(t) - C12(t));
+  };
+
+  glm::vec3 C234 (float t) {
+    return C23(t) + t * (C34(t) - C23(t));
+  };
+
+  glm::vec3 C (float t) {
+    return C123(t) + t * (C234(t) - C123(t));
+  };
+
+  glm::vec3 current_position_;
+  glm::vec3 final_position_;
+  int object_id_ = HAMMER;
+  std::string object_name_ = "hammer";
+
+  // Pontos da curva de Bézier
+  glm::vec3 position_1_;
+  glm::vec3 position_2_;
+  glm::vec3 position_3_;
+  glm::vec3 position_4_;
+
+  float t_;
+  double tprev_;
 };
 
 // Classe responsável pelo processamento da lógica de jogo
@@ -419,6 +505,11 @@ public:
       player_lives_--;
     }
 
+    // Atualiza a posição dos martelos e remove os que concluíram sua animação
+    hammer_list_.erase(std::remove_if(hammer_list_.begin(), hammer_list_.end(),
+      [](Hammer& hammer) { return !hammer.UpdatePosition(); }), hammer_list_.end());
+
+    // Desenha os elementos em campo
     Draw(model);
   }
 
@@ -429,7 +520,11 @@ public:
     if (IsGameOver())
       return;
 
+    // Marca no espaço que houve um ataque
     tile_list_[position].Hit();
+
+    // Adiciona um martelo à lista nessa posição
+    hammer_list_.emplace_back(position_list_[position]);
 
     if (enemy_list_.find(position) != enemy_list_.end()) {
       // Tira uma vida do inimigo se o acertou
@@ -466,8 +561,14 @@ private:
     for (auto& tile : tile_list_)
       tile.Draw(model);
 
+    // Desenhamos os inimigos ativos
     for (auto& enemy : enemy_list_) {
       enemy.second->Draw(model);
+    }
+
+    // Desenhamos os martelos ativos
+    for (auto& hammer : hammer_list_) {
+      hammer.Draw(model);
     }
   }
 
@@ -491,6 +592,9 @@ private:
 
   // Mapea inimigos nas posições do tabuleiro
   std::map<int, Enemy*> enemy_list_;
+
+  // Lista de martelos ativos no momento
+  std::vector<Hammer> hammer_list_;
 
   // Gerador de números aleatórios para posicionamento dos inimigos
   std::random_device random_device_;
@@ -599,6 +703,10 @@ int main(int argc, char* argv[])
     ObjModel cowmodel(Cow::ObjFilePath().c_str());
     ComputeNormals(&cowmodel);
     BuildTrianglesAndAddToVirtualScene(&cowmodel);
+
+    ObjModel hammermodel(Hammer::ObjFilePath().c_str());
+    ComputeNormals(&hammermodel);
+    BuildTrianglesAndAddToVirtualScene(&hammermodel);
 
     if ( argc > 1 )
     {

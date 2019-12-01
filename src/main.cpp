@@ -12,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <algorithm>
+#include <random>
 
 // Headers das bibliotecas OpenGL
 #include <glad/glad.h>   // Criação de contexto OpenGL 3.3
@@ -94,6 +95,8 @@ void TextRendering_ShowModelViewProjection(GLFWwindow* window, glm::mat4 project
 void TextRendering_ShowEulerAngles(GLFWwindow* window);
 void TextRendering_ShowProjection(GLFWwindow* window);
 void TextRendering_ShowFramesPerSecond(GLFWwindow* window);
+void TextRendering_ShowPlayerLives(GLFWwindow* window);
+void TextRendering_ShowGameOver(GLFWwindow* window);
 
 // Funções callback para comunicação com o sistema operacional e interação do
 // usuário. Veja mais comentários nas definições das mesmas, abaixo.
@@ -211,6 +214,10 @@ public:
         is_hit_time_ = glfwGetTime();
     }
 
+  static std::string ObjFilePath() {
+    return "../../data/plane.obj";
+  }
+
 private:
     glm::vec3 position_;
     int is_hit_ = 0;
@@ -222,8 +229,8 @@ private:
 // Classe base para inimigos no jogo
 class Enemy {
 public:
-  Enemy(glm::vec3 position, int num_lives) :
-    position_(position), num_lives_(num_lives)
+  Enemy(glm::vec3 position, int num_lives, double presence_interval) :
+    position_(position), num_lives_(num_lives), presence_interval_(presence_interval)
   {}
 
   /**
@@ -238,15 +245,31 @@ public:
     return --num_lives_ <= 0;
   }
 
+  /**
+   * Registra o momento em que o inimigo entra no jogo para poder sair após determinado intervalo
+   */
+  void SetSpawnTime(double time) {
+    spawn_time_ = time;
+  }
+
+  /**
+   * Retorna se o inimigo deve sair do jogo pois já passou seu intervalo de presença
+   */
+  bool HasPresenceExpired(double time) {
+    return time - spawn_time_ >= presence_interval_;
+  }
+
 protected:
   glm::vec3 position_;
   int num_lives_;
+  double spawn_time_;
+  double presence_interval_;
 };
 
 // Classe que define o inimigo básico coelho
 class Rabbit : public Enemy {
 public:
-  explicit Rabbit(glm::vec3 position) : Enemy(position, 2 /* Number of lives */)
+  explicit Rabbit(glm::vec3 position) : Enemy(position, 1 /* Vidas */, 4 /* Tempo em campo */)
   {}
 
   void Draw(glm::mat4& model) override {
@@ -256,6 +279,10 @@ public:
     glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(model));
     glUniform1i(object_id_uniform, object_id_);
     DrawVirtualObject(object_name_.c_str());
+  }
+
+  static std::string ObjFilePath() {
+    return "../../data/bunny.obj";
   }
 
 private:
@@ -277,14 +304,90 @@ public:
       glm::vec3(-2.5f ,-1.0f ,-5.0f),
       glm::vec3(0.0f, -1.0f, -5.0f),
       glm::vec3(2.5f, -1.0f, -5.0f)
-    })
+    }),
+    random_algorithm_(random_device_()),
+    rng_(0, 8),
+    last_enemy_placement_time_(glfwGetTime())
   {
+    // Cria planos e inimigos em todas as posições, exibe e esconde sob demanda
     for (const auto& position : position_list_) {
       tile_list_.emplace_back(position);
       rabbit_list_.emplace_back(position);
     }
   }
 
+  /**
+   * Loop principal de jogo, cria e avalia modificações no mundo, desenhando-o de acordo
+   */
+  void Loop(glm::mat4& model) {
+    if (IsGameOver())
+      return;
+
+    // Adiciona inimigos aleatoriamente após intervalo de tempo
+    auto current_time = glfwGetTime();
+
+    if (current_time - last_enemy_placement_time_ >= 0.8) {
+      last_enemy_placement_time_ = current_time;
+      auto enemy_place = rng_(random_algorithm_);
+
+      if (enemy_list_.find(enemy_place) == enemy_list_.end()) {
+        enemy_list_.insert( std::pair<int, Enemy*>( enemy_place, &rabbit_list_[enemy_place] ));
+        rabbit_list_[enemy_place].SetSpawnTime(current_time);
+      }
+    }
+
+    // Verifica se inimigos devem sair por terem cumprido seu tempo em campo
+    std::vector<int> to_remove;
+
+    for (const auto& enemy : enemy_list_)
+      if (enemy.second->HasPresenceExpired(current_time))
+        to_remove.push_back(enemy.first);
+
+    // Remove o inimigo e retira uma vida do jogador por não o ter matado
+    for (auto position : to_remove) {
+      enemy_list_.erase( position );
+      player_lives_--;
+    }
+
+    Draw(model);
+  }
+
+  /**
+   * Processa o comando de martelar uma posição
+   */
+  void HitPosition(int position) {
+    if (IsGameOver())
+      return;
+
+    tile_list_[position].Hit();
+
+    if (enemy_list_.find(position) != enemy_list_.end()) {
+      // Tira uma vida do inimigo se o acertou
+      bool is_dead = enemy_list_[position]->Hit();
+
+      if (is_dead)
+        enemy_list_.erase(position);
+    } else {
+      // Tira uma vida do jogador se não acertou um inimigo
+      player_lives_--;
+    }
+  }
+
+  /**
+   * Utilizado para exibição na tela
+   */
+  int GetPlayerLives() {
+    return player_lives_ > 0 ? player_lives_ : 0;
+  }
+
+  /**
+   * Usado para terminar as interações do jogo e exibir a mensagem de fim de jogo na tela
+   */
+  bool IsGameOver() {
+    return player_lives_ <= 0;
+  }
+
+private:
   /**
    * Desenha os objetos de jogo, ambiente e inimigos ativos
    */
@@ -293,34 +396,14 @@ public:
     for (auto& tile : tile_list_)
       tile.Draw(model);
 
-    // TODO(jfguimaraes) Implement enemy spawning and despawning logic
-    static bool added_test_enemy = false;
-
-    if (!added_test_enemy) {
-      added_test_enemy = true;
-      enemy_list_.insert(std::pair<int, Enemy*>(3, &rabbit_list_[3]));
-    }
-
     for (auto& enemy : enemy_list_) {
       enemy.second->Draw(model);
     }
   }
 
-  /**
-   * Processa o comando de martelar uma posição
-   */
-  void HitPosition(int position) {
-    tile_list_[position].Hit();
+  // Vidas do jogador, quando chega em 0 o jogo acaba
+  int player_lives_ = 3;
 
-    if (enemy_list_.find(position) != enemy_list_.end()) {
-      bool is_dead = enemy_list_[position]->Hit();
-
-      if (is_dead)
-        enemy_list_.erase(position);
-    }
-  }
-
-private:
   // Coordenadas das posições do tabuleiro
   const std::vector<glm::vec3> position_list_;
 
@@ -332,6 +415,14 @@ private:
 
   // Mapea inimigos nas posições do tabuleiro
   std::map<int, Enemy*> enemy_list_;
+
+  // Gerador de números aleatórios para posicionamento dos inimigos
+  std::random_device random_device_;
+  std::mt19937 random_algorithm_;
+  std::uniform_int_distribution<std::mt19937::result_type> rng_;
+
+  // Registro de tempo do último inimigo adicionado
+  double last_enemy_placement_time_;
 };
 
 // Inicializamos a classe que controla a lógica de jogo
@@ -419,11 +510,11 @@ int main(int argc, char* argv[])
     ComputeNormals(&spheremodel);
     BuildTrianglesAndAddToVirtualScene(&spheremodel);
 
-    ObjModel bunnymodel("../../data/bunny.obj");
+    ObjModel bunnymodel(Rabbit::ObjFilePath().c_str());
     ComputeNormals(&bunnymodel);
     BuildTrianglesAndAddToVirtualScene(&bunnymodel);
 
-    ObjModel planemodel("../../data/plane.obj");
+    ObjModel planemodel(Tile::ObjFilePath().c_str());
     ComputeNormals(&planemodel);
     BuildTrianglesAndAddToVirtualScene(&planemodel);
 
@@ -528,8 +619,15 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(view_uniform       , 1 , GL_FALSE , glm::value_ptr(view));
         glUniformMatrix4fv(projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
-        // Desenhamos os elementos de jogo
-        world.Draw(model);
+        // Loop de jogo
+        world.Loop(model);
+
+        // Exibe as vidas do jogador
+        TextRendering_ShowPlayerLives(window);
+
+        // Exibe mensagem de fim de jogo quando as vidas chegam a 0
+        if (world.IsGameOver())
+          TextRendering_ShowGameOver(window);
 
         // O framebuffer onde OpenGL executa as operações de renderização não
         // é o mesmo que está sendo mostrado para o usuário, caso contrário
@@ -1309,45 +1407,48 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         fflush(stdout);
     }
 
-    // TODO(jfguimaraes) Register press and release of keys
     // Teclas de ataque às posições
-    switch (key) {
+    if (action == GLFW_PRESS)
+    {
+      switch ( key )
+      {
         case GLFW_KEY_1:
         case GLFW_KEY_KP_1:
-            world.HitPosition(0);
-            break;
+          world.HitPosition( 0 );
+          break;
         case GLFW_KEY_2:
         case GLFW_KEY_KP_2:
-            world.HitPosition(1);
-            break;
+          world.HitPosition( 1 );
+          break;
         case GLFW_KEY_3:
         case GLFW_KEY_KP_3:
-            world.HitPosition(2);
-            break;
+          world.HitPosition( 2 );
+          break;
         case GLFW_KEY_4:
         case GLFW_KEY_KP_4:
-            world.HitPosition(3);
-            break;
+          world.HitPosition( 3 );
+          break;
         case GLFW_KEY_5:
         case GLFW_KEY_KP_5:
-            world.HitPosition(4);
-            break;
+          world.HitPosition( 4 );
+          break;
         case GLFW_KEY_6:
         case GLFW_KEY_KP_6:
-            world.HitPosition(5);
-            break;
+          world.HitPosition( 5 );
+          break;
         case GLFW_KEY_7:
         case GLFW_KEY_KP_7:
-            world.HitPosition(6);
-            break;
+          world.HitPosition( 6 );
+          break;
         case GLFW_KEY_8:
         case GLFW_KEY_KP_8:
-            world.HitPosition(7);
-            break;
+          world.HitPosition( 7 );
+          break;
         case GLFW_KEY_9:
         case GLFW_KEY_KP_9:
-            world.HitPosition(8);
-            break;
+          world.HitPosition( 8 );
+          break;
+      }
     }
 }
 
@@ -1355,6 +1456,30 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 void ErrorCallback(int error, const char* description)
 {
     fprintf(stderr, "ERROR: GLFW: %s\n", description);
+}
+
+/**
+ * Exibe as vidas atuais no jogador na tela
+ */
+void TextRendering_ShowPlayerLives(GLFWwindow* window)
+{
+  float pad = TextRendering_LineHeight(window);
+
+  char buffer[80];
+  snprintf(buffer, 80, "Lives: %d\n", world.GetPlayerLives());
+
+  TextRendering_PrintString(window, buffer, -1.0f+pad/10, -1.0f+2*pad/10, 2.0f);
+}
+
+/**
+ * Notifica o jogador de que o jogo acabou
+ */
+void TextRendering_ShowGameOver(GLFWwindow* window)
+{
+  float lineheight = TextRendering_LineHeight(window);
+  float charwidth = TextRendering_CharWidth(window);
+
+  TextRendering_PrintString(window, "Game Over", 1.0f-26*charwidth, -1.0f+2*lineheight/10, 2.0f);
 }
 
 // Esta função recebe um vértice com coordenadas de modelo p_model e passa o

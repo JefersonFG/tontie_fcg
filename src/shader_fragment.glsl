@@ -22,6 +22,7 @@ uniform mat4 projection;
 #define SPHERE 0
 #define BUNNY  1
 #define PLANE  2
+#define COW    3
 uniform int object_id;
 
 // Indicador de acerto de ataque na posição atual
@@ -108,6 +109,21 @@ void main()
         U = texcoords.x;
         V = texcoords.y;
     }
+    else if ( object_id == COW )
+    {
+        // Mapeamento planar de textura
+        float minx = bbox_min.x;
+        float maxx = bbox_max.x;
+
+        float miny = bbox_min.y;
+        float maxy = bbox_max.y;
+
+        float minz = bbox_min.z;
+        float maxz = bbox_max.z;
+
+        U = (position_model[0] - minx) / (maxx - minx);
+        V = (position_model[1] - miny) / (maxy - miny);
+    }
 
     if ( object_id == SPHERE ) {
         // Para a esfera utilizamos iluminação difusa de Lambert
@@ -139,6 +155,13 @@ void main()
         // Para o plano mapeamos texturas
         // Obtemos a refletância difusa a partir da leitura da imagem TextureImageX
         vec3 Kd0 = texture(is_hit == 1 ? TextureImage1 : TextureImage0, vec2(U, V)).rgb;
+
+        // Equação de Iluminação
+        float lambert = max(0, dot(n, l));
+        color = Kd0 * (lambert + 0.01);
+    } else if ( object_id == COW ) {
+        // Obtemos a refletância difusa a partir da leitura da imagem TextureImage2
+        vec3 Kd0 = texture(TextureImage2, vec2(U, V)).rgb;
 
         // Equação de Iluminação
         float lambert = max(0, dot(n, l));

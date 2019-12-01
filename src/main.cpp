@@ -187,6 +187,7 @@ GLuint g_NumLoadedTextures = 0;
 #define SPHERE 0
 #define BUNNY  1
 #define PLANE  2
+#define COW    3
 
 // Estrutura que define uma posição do ambiente
 class Tile {
@@ -274,8 +275,8 @@ public:
 
   void Draw(glm::mat4& model) override {
     // Desenha o coelho
-    model = Matrix_Translate(position_.x, position_.y + 0.8f, position_.z)
-      * Matrix_Scale(0.8f, 0.8f, 0.8f);
+    model = Matrix_Translate(position_.x, position_.y + 0.5f, position_.z)
+      * Matrix_Scale(0.5f, 0.5f, 0.5f);
     glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(model));
     glUniform1i(object_id_uniform, object_id_);
     DrawVirtualObject(object_name_.c_str());
@@ -293,13 +294,13 @@ private:
 // Classe que define um inimigo baseado no modelo da esfera
 class Sphere : public Enemy {
 public:
-  explicit Sphere(glm::vec3 position) : Enemy(position, 2 /* Vidas */, 6 /* Tempo em campo */)
+  explicit Sphere(glm::vec3 position) : Enemy(position, 1 /* Vidas */, 6 /* Tempo em campo */)
   {}
 
   void Draw(glm::mat4& model) override {
     // Desenha a esfera
-    model = Matrix_Translate(position_.x, position_.y + 0.8f, position_.z)
-      * Matrix_Scale(0.8f, 0.8f, 0.8f);
+    model = Matrix_Translate(position_.x, position_.y + 0.6f, position_.z)
+      * Matrix_Scale(0.6f, 0.6f, 0.6f);
     glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(model));
     glUniform1i(object_id_uniform, object_id_);
     DrawVirtualObject(object_name_.c_str());
@@ -312,6 +313,30 @@ public:
 private:
   int object_id_ = SPHERE;
   std::string object_name_ = "sphere";
+};
+
+// Classe que define um inimigo baseado no modelo da vaca
+class Cow : public Enemy {
+public:
+  explicit Cow(glm::vec3 position) : Enemy(position, 2 /* Vidas */, 6 /* Tempo em campo */)
+  {}
+
+  void Draw(glm::mat4& model) override {
+    // Desenha a vaca
+    model = Matrix_Translate(position_.x - 0.2f, position_.y + 0.6f, position_.z + 0.5f)
+      * Matrix_Rotate_Y(3 * M_PI / 2);
+    glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(model));
+    glUniform1i(object_id_uniform, object_id_);
+    DrawVirtualObject(object_name_.c_str());
+  }
+
+  static std::string ObjFilePath() {
+    return "../../data/cow.obj";
+  }
+
+private:
+  int object_id_ = COW;
+  std::string object_name_ = "cow";
 };
 
 // Classe responsável pelo processamento da lógica de jogo
@@ -331,7 +356,7 @@ public:
     }),
     random_algorithm_(random_device_()),
     placement_rng_(0, 8),
-    enemy_type_rng_(0, 1),
+    enemy_type_rng_(0, 2),
     last_enemy_placement_time_(glfwGetTime())
   {
     // Cria planos e inimigos em todas as posições, exibe e esconde sob demanda
@@ -339,6 +364,7 @@ public:
       tile_list_.emplace_back(position);
       rabbit_list_.emplace_back(position);
       sphere_list_.emplace_back(position);
+      cow_list_.emplace_back(position);
     }
   }
 
@@ -367,6 +393,9 @@ public:
             break;
           case 1:
             new_enemy = &sphere_list_[enemy_place];
+            break;
+          case 2:
+            new_enemy = &cow_list_[enemy_place];
             break;
           default:
             new_enemy = &rabbit_list_[enemy_place];
@@ -456,6 +485,9 @@ private:
 
   // Define uma esfera para cada posição
   std::vector<Sphere> sphere_list_;
+
+  // Define uma vaca para cada posição
+  std::vector<Cow> cow_list_;
 
   // Mapea inimigos nas posições do tabuleiro
   std::map<int, Enemy*> enemy_list_;
@@ -549,6 +581,7 @@ int main(int argc, char* argv[])
     // Carregamos duas imagens para serem utilizadas como textura
     LoadTextureImage("../../data/stonetiles.png"); // TextureImage0
     LoadTextureImage("../../data/stonetilesred.png"); // TextureImage1
+    LoadTextureImage("../../data/cow.png"); // TextureImage2
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
     ObjModel spheremodel(Sphere::ObjFilePath().c_str());
@@ -562,6 +595,10 @@ int main(int argc, char* argv[])
     ObjModel planemodel(Tile::ObjFilePath().c_str());
     ComputeNormals(&planemodel);
     BuildTrianglesAndAddToVirtualScene(&planemodel);
+
+    ObjModel cowmodel(Cow::ObjFilePath().c_str());
+    ComputeNormals(&cowmodel);
+    BuildTrianglesAndAddToVirtualScene(&cowmodel);
 
     if ( argc > 1 )
     {
